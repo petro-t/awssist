@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- theme tokens (consumed via Tailwind config) ---------- */
+:root,
+.theme-light {
+  --bg-0: 248 250 252;   /* slate-50  */
+  --bg-1: 255 255 255;   /* white     */
+  --bg-2: 241 245 249;   /* slate-100 */
+  --bg-3: 226 232 240;   /* slate-200 */
+
+  --border: 203 213 225;       /* slate-300 */
+  --border-muted: 226 232 240; /* slate-200 */
+
+  --fg: 15 23 42;        /* slate-900 */
+  --fg-muted: 71 85 105; /* slate-600 */
+  --fg-subtle: 100 116 139; /* slate-500 */
+
+  --accent: 245 158 11;       /* amber-500 */
+  --accent-dim: 217 119 6;    /* amber-600 */
+  --accent-contrast: 17 24 39;/* slate-900 — text on accent buttons */
+
+  --ok: 22 163 74;     /* green-600 */
+  --warn: 202 138 4;   /* yellow-600 */
+  --err: 220 38 38;    /* red-600 */
+
+  color-scheme: light;
+}
+
+.theme-dark {
+  --bg-0: 13 17 23;
+  --bg-1: 17 22 29;
+  --bg-2: 22 28 37;
+  --bg-3: 29 37 48;
+
+  --border: 42 51 64;
+  --border-muted: 31 39 51;
+
+  --fg: 230 237 243;
+  --fg-muted: 175 184 193;
+  --fg-subtle: 125 137 152;
+
+  --accent: 255 153 0;
+  --accent-dim: 168 103 5;
+  --accent-contrast: 0 0 0;
+
+  --ok: 63 185 80;
+  --warn: 210 153 34;
+  --err: 248 81 73;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  background: rgb(var(--bg-0));
+  color: rgb(var(--fg));
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+input,
+textarea,
+.selectable {
+  user-select: text;
+}
+
+/* Titlebar drag region */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-nodrag {
+  -webkit-app-region: no-drag;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-accent text-accent-contrast hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-bg-3 text-fg border border-border hover:bg-bg-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-7 h-7 rounded text-fg-muted hover:text-fg hover:bg-bg-3 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .input {
+    @apply w-full bg-bg-1 border border-border rounded px-2 py-1.5 text-sm text-fg focus:outline-none focus:ring-1 focus:ring-accent;
+  }
+  .card {
+    @apply bg-bg-1 border border-border-muted rounded;
+  }
+  .label {
+    @apply text-xs uppercase tracking-wide text-fg-subtle;
+  }
+}

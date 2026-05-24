@@ -1,0 +1,73 @@
+appId: com.awssist.app
+productName: AWSsist
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+
+# ---------- macOS ----------
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  # Default to arm64 only. Use `npm run dist:mac:universal` to build both archs.
+  target:
+    - target: dmg
+      arch: arm64
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+dmg:
+  artifactName: ${productName}-${version}-${arch}.dmg
+
+# ---------- Windows ----------
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: x64
+  # No code-signing — Windows SmartScreen will warn the first time and the
+  # user has to click "More info → Run anyway". Acceptable for internal use.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  shortcutName: AWSsist
+  uninstallDisplayName: AWSsist
+portable:
+  artifactName: ${productName}-${version}-portable-${arch}.${ext}
+
+# ---------- Linux ----------
+# Note on .deb: cross-compiling .deb from macOS is unreliable (the bundled fpm
+# is from 2015 and produces invalid archives on modern macOS). AppImage works
+# on every major distro and is the recommended format for cross-compiled builds.
+# If you need .deb specifically, build on a Linux host: `npm run dist:linux:full`.
+linux:
+  category: Development
+  icon: build/icon.png
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+  synopsis: Desktop AWS account & session manager
+  description: |
+    AWSsist is a profile manager for AWS — sign in via SSO once, then browse
+    ECS / EC2 / RDS / Redis resources across accounts. One-click SSM
+    port-forwarding tunnels and SSM/ECS shell sessions in your terminal.
+  desktop:
+    entry:
+      Name: AWSsist
+      Comment: AWS Profile Management Assistant
+      Categories: Development;Utility;
+      StartupWMClass: AWSsist
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+deb:
+  artifactName: ${productName}_${version}_${arch}.${ext}
+  # Runtime dependencies a user's system needs for SSM/SSO features.
+  # awscli and session-manager-plugin live outside apt repos on most distros,
+  # so we mention them in the description rather than declaring as Depends.
