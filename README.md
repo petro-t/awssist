@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/banner-light.png">
+    <img alt="AWSsist — AWS Profile Management Assistant" src="docs/banner-dark.png" width="640">
+  </picture>
+</p>
+
 # AWSsist
 
 **AWS Profile Management Assistant** — a desktop app that turns the team's
