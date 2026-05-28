@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, LogIn, LogOut, Search, Loader2, Trash2 } from 'lucide-react';
+import { LogIn, LogOut, Search, Loader2, Trash2 } from 'lucide-react';
 
 const COMMON_REGIONS = [
   'us-east-1',
@@ -194,12 +194,14 @@ export function SsoSessionCard({ session }: { session: SsoSessionConfig }): JSX.
 
       {deviceInfo && (
         <div className="mt-3 p-3 rounded bg-bg-2 border border-border text-sm">
-          <div className="flex items-center gap-2 text-fg-muted mb-1">
-            <CheckCircle2 size={14} className="text-ok" />
-            Browser opened. Confirm this code matches:
+          <div className="flex items-center gap-2 text-fg-muted">
+            <Loader2 size={14} className="animate-spin text-accent" />
+            Waiting for browser sign-in…
           </div>
-          <div className="font-mono text-lg tracking-widest text-accent">{deviceInfo.userCode}</div>
-          <div className="text-xs text-fg-subtle mt-2 selectable break-all">{deviceInfo.uri}</div>
+          <div className="text-xs text-fg-subtle mt-2">
+            A browser window should have opened. Approve the AWS access prompt and you'll be signed in here automatically.
+          </div>
+          <div className="text-[11px] text-fg-subtle mt-2 selectable break-all opacity-60">{deviceInfo.uri}</div>
         </div>
       )}
 
@@ -326,10 +328,10 @@ function ImportPicker({
           <h2 className="text-sm font-semibold flex-1">
             Import accounts from <span className="font-mono">{session.name}</span>
           </h2>
-          <label className="text-xs text-fg-muted flex items-center gap-2">
+          <label className="text-xs text-fg-muted flex items-center gap-2 shrink-0">
             Region for all
             <select
-              className="input max-w-[140px]"
+              className="input w-[180px]"
               value={bulkRegion}
               onChange={(e) => applyBulkRegion(e.target.value)}
             >
@@ -357,13 +359,13 @@ function ImportPicker({
                 <th className="px-3 py-2">Account</th>
                 <th className="px-3 py-2">Role</th>
                 <th className="px-3 py-2">Profile name</th>
-                <th className="px-3 py-2 w-28">Region</th>
+                <th className="px-3 py-2 w-44">Region</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.key} className="border-b border-border-muted/40">
-                  <td className="px-3 py-1.5">
+                <tr key={r.key} className="border-b border-border-muted/40 align-top">
+                  <td className="px-3 py-3">
                     <input
                       type="checkbox"
                       checked={r.selected}
@@ -387,7 +389,7 @@ function ImportPicker({
                   </td>
                   <td className="px-3 py-1.5">
                     <select
-                      className="input"
+                      className="input w-full min-w-[150px]"
                       value={r.region}
                       onChange={(e) => update(r.key, { region: e.target.value })}
                     >

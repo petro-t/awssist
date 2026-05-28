@@ -258,17 +258,43 @@ npm run dist:all           # macOS + Windows + Linux from one host
 Cross-compile from any host is supported except `.deb` — that target needs
 a Linux host because the bundled `fpm` is broken on modern macOS.
 
+### macOS signing & notarization
+
+`npm run dist:mac` produces a signed + notarized `.dmg` when the following
+five environment variables are set:
+
+```sh
+export CSC_LINK="$HOME/.codesign/awssist-developer-id.p12"
+export CSC_KEY_PASSWORD="<password used when exporting the .p12>"
+export APPLE_ID="<your Apple ID email>"
+export APPLE_APP_SPECIFIC_PASSWORD="<16-char app-specific password>"
+export APPLE_TEAM_ID="<10-char Team ID>"
+
+npm run dist:mac
+```
+
+- The `.p12` must be a **Developer ID Application** certificate (not Mac App
+  Distribution — that's a different cert for the Mac App Store).
+- Generate the app-specific password at https://appleid.apple.com → Sign-In
+  and Security → App-Specific Passwords.
+- Notarization adds 2–10 minutes on top of the build — electron-builder
+  uploads the binary, polls Apple, and staples the resulting ticket to the
+  `.dmg` automatically.
+- For a quick unsigned local build, set `CSC_IDENTITY_AUTO_DISCOVERY=false`
+  and electron-builder skips signing entirely.
+
+A signed + notarized `.dmg` opens with **zero warnings** on macOS — no
+"unidentified developer", no "damaged" message, no `xattr` workaround.
+
 ---
 
-## Why is it unsigned?
+## Code signing status
 
-Code signing certificates are organisation-level credentials we don't bundle
-into the repo. The builds shipped from this codebase are unsigned, which means:
-
-- **macOS** prompts on first open ("AWSsist can't be verified"). Right-click
-  the app → Open the first time, then it stops asking.
-- **Windows** SmartScreen warns; click "More info → Run anyway".
-- **Linux** AppImage runs unchallenged; there is no signing on Linux anyway.
+| Platform | Status |
+| --- | --- |
+| **macOS** | Signed (Developer ID Application) + notarized when build env vars are set — opens cleanly |
+| **Windows** | Unsigned — SmartScreen warns; click "More info → Run anyway" |
+| **Linux** | AppImage runs unchallenged; there is no signing on Linux anyway |
 
 For internal distribution this is fine. To publish externally, add an
 Apple Developer certificate and an Authenticode certificate to the

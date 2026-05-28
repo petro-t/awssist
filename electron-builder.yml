@@ -9,16 +9,27 @@ files:
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
 
 # ---------- macOS ----------
+# Signed + notarized using a Developer ID Application certificate.
+# Required environment variables at build time:
+#   CSC_LINK                       — path (or base64) to the .p12 certificate
+#   CSC_KEY_PASSWORD               — password used when the .p12 was exported
+#   APPLE_ID                       — Apple ID enrolled in the Developer Program
+#   APPLE_APP_SPECIFIC_PASSWORD    — 16-char app-specific password from appleid.apple.com
+#   APPLE_TEAM_ID                  — 10-char Team ID from developer.apple.com
+#
+# To do an unsigned local build (e.g. for quick UI testing), set CSC_IDENTITY_AUTO_DISCOVERY=false.
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  # Default to arm64 only. Use `npm run dist:mac:universal` to build both archs.
   target:
     - target: dmg
       arch: arm64
-  hardenedRuntime: false
+  hardenedRuntime: true
   gatekeeperAssess: false
-  identity: null
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize:
+    teamId: "${env.APPLE_TEAM_ID}"
 dmg:
   artifactName: ${productName}-${version}-${arch}.dmg
 
