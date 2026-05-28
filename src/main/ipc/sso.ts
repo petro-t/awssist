@@ -6,6 +6,7 @@ import { fromIni } from '@aws-sdk/credential-providers';
 import { readConfig, removeCredentialEntry, upsertProfile, writeCredentialEntry } from '../aws/config-file';
 import { isTokenValid, readSsoToken } from '../aws/sso-cache';
 import {
+  ensureFreshToken,
   listAccountsAndRoles,
   pollDeviceLogin,
   sessionStatus,
@@ -101,14 +102,27 @@ async function startSession(profileName: string, writeAsDefault: boolean): Promi
   let expiresAt: string;
 
   if (profile.kind === 'sso') {
-    const token = await readSsoToken(profile.ssoSession, profile.ssoStartUrl);
-    if (!isTokenValid(token)) {
-      throw new Error('SSO session not logged in. Run SSO login first.');
+    // Refresh-aware: if the access token is close to expiring, exchange the
+    // refresh_token for a fresh one before calling GetRoleCredentials.
+    let accessToken: string | undefined;
+    if (profile.ssoSession) {
+      const fresh = await ensureFreshToken(profile.ssoSession);
+      accessToken = fresh?.accessToken;
+    }
+    if (!accessToken) {
+      const legacy = await readSsoToken(profile.ssoSession, profile.ssoStartUrl);
+      if (isTokenValid(legacy)) accessToken = legacy?.accessToken;
+    }
+    if (!accessToken) {
+      throw new Error(
+        `SSO session "${profile.ssoSession ?? '?'}" has no usable token. Sign in again from the Profiles tab. ` +
+          `(If this happens repeatedly, open View → Toggle Developer Tools and look for "[sso-device] refresh failed" in the console — AWS's reason is logged there.)`,
+      );
     }
     const client = new SSOClient({ region: ssoRegion ?? profile.region ?? 'us-east-1' });
     const out = await client.send(
       new GetRoleCredentialsCommand({
-        accessToken: token!.accessToken!,
+        accessToken,
         accountId: profile.ssoAccountId!,
         roleName: profile.ssoRoleName!,
       }),

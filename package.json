@@ -1,6 +1,6 @@
 {
   "name": "awssist",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AWSsist — Desktop AWS account & session manager",
   "main": "out/main/index.js",
   "author": {
@@ -18,6 +18,8 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64",
     "dist:mac:universal": "electron-vite build && electron-builder --mac --arm64 --x64",
+    "reinstall:mac": "scripts/reinstall-mac.sh",
+    "build:reinstall:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 && scripts/reinstall-mac.sh",
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:linux": "electron-vite build && electron-builder --linux",
     "dist:linux:full": "electron-vite build && electron-builder --linux AppImage deb",
@@ -45,7 +47,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "electron": "^33.2.1",
+    "electron": "^42.2.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "postcss": "^8.5.0",

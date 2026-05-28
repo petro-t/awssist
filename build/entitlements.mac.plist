@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Electron's renderer / V8 requires JIT and writable executable memory. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Electron loads its own bundled frameworks (Squirrel, Helper apps, etc.)
+         that aren't signed by us; library validation has to be relaxed for the
+         renderer to come up under hardened runtime. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Allow reading DYLD_* environment variables — Node modules occasionally
+         set these during initialisation. -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+
+    <!-- Outbound network access (AWS APIs). -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

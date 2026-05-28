@@ -77,6 +77,14 @@ const api: AwssistApi = {
     ipcRenderer.on('sessions:update', handler);
     return () => ipcRenderer.removeListener('sessions:update', handler);
   },
+  onMainLog(cb) {
+    const handler = (
+      _: unknown,
+      entry: { level: 'log' | 'warn' | 'error'; message: string; time: number },
+    ): void => cb(entry);
+    ipcRenderer.on('main:log', handler);
+    return () => ipcRenderer.removeListener('main:log', handler);
+  },
 
   platform: () => process.platform,
   checkDeps: () => ipcRenderer.invoke('system:checkDeps'),

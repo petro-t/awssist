@@ -8,6 +8,8 @@ import { registerTunnelHandlers, shutdownAllTunnels } from './ipc/tunnels';
 import { registerExecHandlers, shutdownAllExec } from './ipc/exec';
 import { registerSystemHandlers } from './ipc/system';
 import { buildAppMenu } from './menu';
+import { shutdownAllSsoListeners } from './aws/sso-device';
+import { installLogBridge } from './log-bridge';
 
 // Ensure /opt/homebrew/bin is on PATH for spawned aws / session-manager-plugin.
 function augmentPath(): void {
@@ -53,6 +55,10 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   augmentPath();
+  installLogBridge();
+  console.log(
+    `[main] AWSsist starting — electron=${process.versions.electron}, node=${process.versions.node}, chrome=${process.versions.chrome}`,
+  );
   buildAppMenu();
 
   registerProfileHandlers();
@@ -77,4 +83,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   shutdownAllTunnels();
   shutdownAllExec();
+  shutdownAllSsoListeners();
 });

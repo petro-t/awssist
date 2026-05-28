@@ -43,10 +43,22 @@ export default function App(): JSX.Element {
     const off1 = window.awssist.onTunnelUpdate(upsertTunnel);
     const off2 = window.awssist.onSessionUpdate(setSessions);
     const off3 = window.awssist.onTunnelRemove(removeTunnel);
+    // Bridge main-process console output into DevTools so [sso-device]/etc.
+    // are visible — main-process stdout is otherwise invisible in a packaged app.
+    const off4 = window.awssist.onMainLog((entry) => {
+      const fn =
+        entry.level === 'error'
+          ? console.error
+          : entry.level === 'warn'
+            ? console.warn
+            : console.log;
+      fn(`[main] ${entry.message}`);
+    });
     return () => {
       off1();
       off2();
       off3();
+      off4();
     };
   }, [refreshProfiles, refreshSessions, refreshTunnels, refreshDeps, upsertTunnel, removeTunnel, setSessions]);
 

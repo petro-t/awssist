@@ -3,6 +3,7 @@ import { GetRoleCredentialsCommand, SSOClient } from '@aws-sdk/client-sso';
 import { fromIni } from '@aws-sdk/credential-providers';
 import { readConfig } from './config-file';
 import { isTokenValid, readSsoToken } from './sso-cache';
+import { ensureFreshToken } from './sso-device';
 
 interface CacheEntry {
   creds: AwsCredentialIdentity;
@@ -45,10 +46,20 @@ async function resolveSsoCredentials(profileName: string): Promise<AwsCredential
     throw new Error(`Profile "${profileName}" is missing sso_account_id or sso_role_name.`);
   }
 
-  // Read SSO token from cache (keyed by session name when sso_session is set,
-  // falling back to the legacy start-URL key for older configs).
-  const token = await readSsoToken(profile.ssoSession, ssoStartUrl);
-  if (!isTokenValid(token)) {
+  // Read SSO token. When the profile uses an sso_session, route through the
+  // refresh-aware path so an expired access token gets silently exchanged for
+  // a fresh one via the refresh_token grant. Fall back to the legacy
+  // start-URL-keyed cache (no refresh data) for older configs.
+  let accessToken: string | undefined;
+  if (profile.ssoSession) {
+    const fresh = await ensureFreshToken(profile.ssoSession);
+    accessToken = fresh?.accessToken;
+  }
+  if (!accessToken) {
+    const legacy = await readSsoToken(profile.ssoSession, ssoStartUrl);
+    if (isTokenValid(legacy)) accessToken = legacy?.accessToken;
+  }
+  if (!accessToken) {
     throw new Error(
       `Not signed in to SSO session "${profile.ssoSession ?? ssoStartUrl}". Open the Profiles page and click "Sign in" on the session.`,
     );
@@ -57,7 +68,7 @@ async function resolveSsoCredentials(profileName: string): Promise<AwsCredential
   const client = new SSOClient({ region: ssoRegion });
   const out = await client.send(
     new GetRoleCredentialsCommand({
-      accessToken: token!.accessToken!,
+      accessToken,
       accountId: profile.ssoAccountId,
       roleName: profile.ssoRoleName,
     }),

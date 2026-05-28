@@ -222,6 +222,7 @@ export interface AwssistApi {
   onTunnelUpdate(cb: (status: TunnelStatus) => void): () => void;
   onTunnelRemove(cb: (id: string) => void): () => void;
   onSessionUpdate(cb: (sessions: SessionState[]) => void): () => void;
+  onMainLog(cb: (entry: { level: 'log' | 'warn' | 'error'; message: string; time: number }) => void): () => void;
 
   // Misc
   platform(): string;
