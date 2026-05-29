@@ -64,13 +64,47 @@ shows a warning in the sidebar + Settings if either is missing.
 
 ## Installation
 
-### macOS
+### macOS (recommended — Homebrew tap)
+
+Apple Silicon only for now.
+
+```sh
+brew tap petro-t/awssist
+brew install --cask awssist
+
+# AWS CLI dependencies AWSsist relies on at runtime
+brew install awscli
+brew install --cask session-manager-plugin
+```
+
+Future updates:
+
+```sh
+brew upgrade --cask awssist
+```
+
+Uninstall:
+
+```sh
+brew uninstall --cask awssist           # remove the app
+brew uninstall --cask --zap awssist     # remove the app + per-user state
+```
+
+The cask auto-strips the macOS quarantine flag, so the app opens cleanly on
+first launch — no "damaged" prompt, no `xattr` workaround.
+
+### macOS (manual `.dmg` install)
+
+If you'd rather not use Homebrew:
 
 1. Download `AWSsist-<version>-arm64.dmg` (Apple Silicon) from the latest release.
 2. Open the DMG and drag **AWSsist.app** to **Applications**.
-3. First launch: Right-click the app and choose **Open** (Gatekeeper warns
-   because the build is unsigned — see *Why is it unsigned?* below). After
-   the first allow, normal double-click works.
+3. Run once to clear Gatekeeper's quarantine flag (the build is unsigned):
+
+   ```sh
+   xattr -cr /Applications/AWSsist.app
+   ```
+
 4. Install the AWS CLI dependencies:
 
    ```sh
