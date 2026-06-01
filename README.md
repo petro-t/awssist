@@ -356,4 +356,8 @@ icons. `killall Dock && killall Finder`, or log out and back in.
 
 ## License
 
-UNLICENSED — internal tool. See `package.json`.
+[MIT](LICENSE) © 2026 Peter Tretiakov.
+
+Free to use, modify, and redistribute. AWSsist bundles third-party components
+under their own permissive licenses (Electron — MIT, React — MIT, the AWS SDK
+for JavaScript — Apache-2.0, and others).
