@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ChildProcess, spawn } from 'node:child_process';
 import { BrowserWindow, ipcMain } from 'electron';
+import { makeCredentialsProvider } from '../aws/credentials';
 import type { TunnelRequest, TunnelStatus } from '@shared/types';
 
 interface Tunnel {
@@ -94,15 +95,41 @@ async function startTunnel(req: TunnelRequest): Promise<TunnelStatus> {
     'AWS-StartPortForwardingSessionToRemoteHost',
     '--parameters',
     `host=${req.targetHost},portNumber=${req.remotePort},localPortNumber=${req.localPort}`,
-    '--profile',
-    req.profile,
     '--region',
     req.region,
   ];
 
+  // Resolve fresh credentials via AWSsist's own refresh-aware resolver and pass
+  // them as env vars rather than `--profile`. Passing the profile would let the
+  // AWS CLI pick up expired temp creds left in ~/.aws/credentials by
+  // "Start session", which fails the SSM handshake with ExpiredTokenException.
+  let credentialEnv: Record<string, string>;
+  try {
+    const creds = await makeCredentialsProvider(req.profile)();
+    credentialEnv = {
+      AWS_ACCESS_KEY_ID: creds.accessKeyId,
+      AWS_SECRET_ACCESS_KEY: creds.secretAccessKey,
+      AWS_REGION: req.region,
+      AWS_DEFAULT_REGION: req.region,
+    };
+    if (creds.sessionToken) credentialEnv.AWS_SESSION_TOKEN = creds.sessionToken;
+  } catch (err) {
+    status.state = 'error';
+    status.error =
+      err instanceof Error ? err.message : `Failed to resolve credentials for ${req.profile}`;
+    broadcast(snapshot(tunnel));
+    return snapshot(tunnel);
+  }
+
+  // Start from our own env, drop any inherited profile selection, then layer in
+  // the freshly-resolved keys so the CLI uses those rather than a config profile.
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, ...credentialEnv, AWS_PAGER: '' };
+  delete childEnv.AWS_PROFILE;
+  delete childEnv.AWS_DEFAULT_PROFILE;
+
   const proc = spawn('aws', args, {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, AWS_PAGER: '' },
+    env: childEnv,
     // detached: true puts the child (and its session-manager-plugin grandchild)
     // into its own process group, which we can later signal as a unit.
     detached: true,

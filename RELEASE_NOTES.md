@@ -1,5 +1,45 @@
 # AWSsist Release Notes
 
+## v0.2.1 — credential fix for terminal sessions · 2026-06-01
+
+A targeted bugfix for `ExpiredTokenException` (and `config profile ()`)
+errors when opening ECS exec / EC2 SSM sessions and RDS/Redis tunnels.
+
+### The bug
+
+"Start session" writes short-lived STS credentials into `~/.aws/credentials`
+under the profile name. Once those expired (~1 hour), launching a terminal
+session or tunnel passed `--profile <name>` to the AWS CLI, which found the
+stale static-style entry in `~/.aws/credentials` and used it — shadowing the
+SSO config in `~/.aws/config`. The SSM/KMS handshake then failed with
+`ExpiredTokenException`. It affected any profile a session had been started
+on, and got worse over time as more profiles accumulated stale entries.
+
+### The fix
+
+ECS exec, EC2 SSM, and RDS/Redis tunnels no longer pass `--profile`. Instead
+AWSsist resolves **fresh** credentials through its own refresh-aware resolver
+(silent SSO token refresh → `GetRoleCredentials`) and injects them as
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` env vars,
+with `AWS_PROFILE` unset. The stale `~/.aws/credentials` file is never
+consulted for these flows.
+
+- Credentials are resolved in-process; if the SSO session is genuinely
+  expired you get a clear in-app error *before* the terminal opens instead of
+  a terminal flashing an expired-token message.
+- On macOS/Linux the temp launch script self-deletes (`rm "$0"`) before
+  exec, with a 15-second main-process backstop, so injected credentials don't
+  linger on disk.
+
+### Note for affected users
+
+No action needed — the fix is automatic. If you want to tidy the stale
+entries `~/.aws/credentials` accumulated, end each session from the Sessions
+tab (or just delete the file; AWSsist and the AWS CLI both regenerate what
+they need).
+
+---
+
 ## v0.2.0 — EC2, cross-platform installers, themes · 2026-05-26
 
 The second drop. v0.1.0 was the first end-to-end build; v0.2.0 broadens the

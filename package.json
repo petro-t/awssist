@@ -1,6 +1,6 @@
 {
   "name": "awssist",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AWSsist — Desktop AWS account & session manager",
   "main": "out/main/index.js",
   "author": {

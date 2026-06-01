@@ -61,7 +61,7 @@ export function SettingsPage(): JSX.Element {
         <section>
           <h3 className="text-sm font-semibold text-fg mb-2">About</h3>
           <div className="text-sm text-fg-muted space-y-1">
-            <div>AWSsist 0.2.0</div>
+            <div>AWSsist 0.2.1</div>
             <div>
               ~/.aws/config and ~/.aws/credentials are the source of truth — edits made here are reflected in your shell environment.
             </div>
