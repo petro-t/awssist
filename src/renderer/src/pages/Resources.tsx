@@ -145,7 +145,6 @@ export function Resources(): JSX.Element {
           target={tunnelTarget}
           bastions={bastions}
           onClose={() => setTunnelTarget(null)}
-          onStarted={() => setTunnelTarget(null)}
         />
       )}
     </>

@@ -38,7 +38,12 @@ export interface Profile {
 export interface SessionState {
   profile: string;
   accessKeyId: string;
-  expiresAt: string; // ISO
+  /**
+   * ISO expiry. Optional because sessions rehydrated from ~/.aws/credentials
+   * at startup have no expiry recorded on disk — only the access/secret/token
+   * tuple. The Sessions tab renders an em-dash when this is absent.
+   */
+  expiresAt?: string;
   accountId?: string;
   arn?: string;
   region?: string;
@@ -127,6 +132,25 @@ export interface ElastiCacheNodeRef {
   subnetGroup?: string;
 }
 
+export interface EcrRepositoryRef {
+  name: string;
+  arn: string;
+  registryId: string;
+  uri: string;
+  createdAt?: string;
+  tagMutability?: string;
+  scanOnPush?: boolean;
+  encryptionType?: string;
+}
+
+export interface EcrImageRef {
+  digest: string;
+  tags: string[];
+  pushedAt?: string;
+  sizeBytes?: number;
+  manifestMediaType?: string;
+}
+
 export interface Ec2InstanceRef {
   instanceId: string;
   name?: string;
@@ -212,6 +236,13 @@ export interface AwssistApi {
   listBastions(profile: string, region: string): Promise<Ec2InstanceRef[]>;
   listEc2Instances(profile: string, region: string): Promise<Ec2InstanceRef[]>;
   ssmStartSession(profile: string, region: string, instanceId: string, name?: string): Promise<void>;
+
+  // ECR
+  listEcrRepositories(profile: string, region: string): Promise<EcrRepositoryRef[]>;
+  listEcrImages(profile: string, region: string, repositoryName: string): Promise<EcrImageRef[]>;
+
+  // Clipboard
+  copyToClipboard(text: string): Promise<void>;
 
   // Tunnels
   startTunnel(req: TunnelRequest): Promise<TunnelStatus>;

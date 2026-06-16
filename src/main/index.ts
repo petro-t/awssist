@@ -1,8 +1,9 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
 import { registerProfileHandlers } from './ipc/profiles';
-import { registerSsoHandlers } from './ipc/sso';
+import { registerSsoHandlers, rehydrateActiveSessions } from './ipc/sso';
 import { registerEcsHandlers } from './ipc/ecs';
+import { registerEcrHandlers } from './ipc/ecr';
 import { registerResourceHandlers } from './ipc/resources';
 import { registerTunnelHandlers, shutdownAllTunnels } from './ipc/tunnels';
 import { registerExecHandlers, shutdownAllExec } from './ipc/exec';
@@ -64,12 +65,21 @@ app.whenReady().then(() => {
   registerProfileHandlers();
   registerSsoHandlers();
   registerEcsHandlers();
+  registerEcrHandlers();
   registerResourceHandlers();
   registerTunnelHandlers();
   registerExecHandlers();
   registerSystemHandlers();
 
   createWindow();
+
+  // Rehydrate the in-memory session list from ~/.aws/credentials so sessions
+  // survive an app restart. Fire-and-forget — the renderer subscribes to
+  // `sessions:update` and refreshes when the broadcast arrives. We deliberately
+  // don't await it so the window opens immediately.
+  void rehydrateActiveSessions().catch((err) => {
+    console.error('[main] rehydrateActiveSessions', err);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -108,7 +108,7 @@ export function Profiles(): JSX.Element {
                         )}
                         {sess && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30">
-                            session · {countdown(sess.expiresAt)}
+                            {sess.expiresAt ? `session · ${countdown(sess.expiresAt)}` : 'session · —'}
                           </span>
                         )}
                       </div>

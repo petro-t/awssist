@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Boxes, Database, KeyRound, Monitor, Moon, Network, Server, Settings, Sun, Terminal as TerminalIcon } from 'lucide-react';
+import { Boxes, Database, KeyRound, Monitor, Moon, Network, Package, Server, Settings, Sun, Terminal as TerminalIcon } from 'lucide-react';
 import { useApp } from './store';
 import { Profiles } from './pages/Profiles';
 import { Tunnels } from './pages/Tunnels';
 import { Ecs } from './pages/Ecs';
+import { Ecr } from './pages/Ecr';
 import { Ec2 } from './pages/Ec2';
 import { Sessions } from './pages/Sessions';
 import { Resources } from './pages/Resources';
 import { SettingsPage } from './pages/Settings';
 import { useTheme, useThemeBootstrap, type ThemePref } from './theme';
 
-type Tab = 'profiles' | 'sessions' | 'ec2' | 'ecs' | 'tunnels' | 'resources' | 'settings';
+type Tab = 'profiles' | 'sessions' | 'ec2' | 'ecs' | 'ecr' | 'tunnels' | 'resources' | 'settings';
 
 const TABS: { id: Tab; label: string; Icon: typeof Boxes }[] = [
   { id: 'profiles', label: 'Profiles', Icon: KeyRound },
   { id: 'sessions', label: 'Sessions', Icon: TerminalIcon },
   { id: 'ec2', label: 'EC2', Icon: Server },
   { id: 'ecs', label: 'ECS', Icon: Boxes },
+  { id: 'ecr', label: 'ECR', Icon: Package },
   { id: 'tunnels', label: 'Tunnels', Icon: Network },
   { id: 'resources', label: 'RDS / Redis', Icon: Database },
   { id: 'settings', label: 'Settings', Icon: Settings },
@@ -91,6 +93,7 @@ export default function App(): JSX.Element {
         {tab === 'sessions' && <Sessions />}
         {tab === 'ec2' && <Ec2 />}
         {tab === 'ecs' && <Ecs />}
+        {tab === 'ecr' && <Ecr />}
         {tab === 'tunnels' && <Tunnels />}
         {tab === 'resources' && <Resources />}
         {tab === 'settings' && <SettingsPage />}

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { ipcMain } from 'electron';
+import { clipboard, ipcMain } from 'electron';
 import { GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { sts } from '../aws/client';
 
@@ -16,6 +16,10 @@ export function registerSystemHandlers(): void {
       checkBin('session-manager-plugin', ['--version']),
     ]);
     return { aws, sessionManagerPlugin: smp };
+  });
+
+  ipcMain.handle('clipboard:writeText', (_evt, text: string) => {
+    clipboard.writeText(text);
   });
 
   ipcMain.handle('aws:whoami', async (_evt, profile: string, region: string) => {

@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { BrowserWindow, ipcMain, shell } from 'electron';
 import { GetRoleCredentialsCommand, SSOClient } from '@aws-sdk/client-sso';
-import { GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import { fromIni } from '@aws-sdk/credential-providers';
-import { readConfig, removeCredentialEntry, upsertProfile, writeCredentialEntry } from '../aws/config-file';
+import { readConfig, readCredentials, removeCredentialEntry, upsertProfile, writeCredentialEntry } from '../aws/config-file';
 import { isTokenValid, readSsoToken } from '../aws/sso-cache';
 import {
   ensureFreshToken,
@@ -33,6 +33,10 @@ function ensureSessionTick(): void {
     const now = Date.now();
     let changed = false;
     for (const [profile, sess] of activeSessions) {
+      // Sessions rehydrated from ~/.aws/credentials on startup have no
+      // recorded expiry — leave them alone here; the user ends them manually,
+      // or they fail next time an AWS call goes through their temp creds.
+      if (!sess.expiresAt) continue;
       if (Date.parse(sess.expiresAt) <= now) {
         activeSessions.delete(profile);
         changed = true;
@@ -40,6 +44,66 @@ function ensureSessionTick(): void {
     }
     if (changed) broadcastSessions();
   }, 30_000);
+}
+
+/**
+ * On app launch, look at ~/.aws/credentials and rebuild the in-memory session
+ * list from anything that carries an aws_session_token (temp creds from STS,
+ * which is what "Start session" writes). Each candidate is validated by a real
+ * STS GetCallerIdentity using the literal cached keys — if it returns an
+ * identity, the session is alive and we add it; if it 403s the creds expired
+ * since last quit and we drop the entry.
+ *
+ * We can't recover the exact expiry timestamp (the credentials file doesn't
+ * carry it), so SessionState.expiresAt is left undefined for rehydrated
+ * entries. The Sessions tab renders an em-dash for those.
+ */
+export async function rehydrateActiveSessions(): Promise<void> {
+  let file: Record<string, Record<string, string>>;
+  try {
+    file = await readCredentials();
+  } catch {
+    return;
+  }
+  const candidates = Object.entries(file).filter(
+    ([profile, entry]) =>
+      profile !== 'default' && entry.aws_session_token && entry.aws_access_key_id && entry.aws_secret_access_key,
+  );
+  if (candidates.length === 0) return;
+
+  const { profiles } = await readConfig();
+  const profileLookup = new Map(profiles.map((p) => [p.name, p]));
+
+  await Promise.all(
+    candidates.map(async ([profile, entry]) => {
+      const region = profileLookup.get(profile)?.region ?? 'us-east-1';
+      const client = new STSClient({
+        region,
+        // Bypass our resolver here — we want to validate *these specific*
+        // bytes from disk, not refresh them through SSO. If they're alive,
+        // great; if not, drop them.
+        credentials: {
+          accessKeyId: entry.aws_access_key_id,
+          secretAccessKey: entry.aws_secret_access_key,
+          sessionToken: entry.aws_session_token,
+        },
+      });
+      try {
+        const ident = await client.send(new GetCallerIdentityCommand({}));
+        activeSessions.set(profile, {
+          profile,
+          accessKeyId: entry.aws_access_key_id,
+          accountId: ident.Account,
+          arn: ident.Arn,
+          region,
+        });
+      } catch {
+        // Expired or otherwise unusable — leave it on disk but don't list it.
+      }
+    }),
+  );
+
+  if (activeSessions.size > 0) broadcastSessions();
 }
 
 async function lookupProfile(profileName: string) {

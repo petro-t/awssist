@@ -28,7 +28,8 @@ export function Sessions(): JSX.Element {
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-fg">{s.profile}</div>
                   <div className="text-xs text-fg-subtle selectable mt-0.5">
-                    {s.arn ?? s.accountId ?? ''} · {s.region ?? '-'} · expires in {remaining(s.expiresAt)}
+                    {s.arn ?? s.accountId ?? ''} · {s.region ?? '-'} ·{' '}
+                    {s.expiresAt ? <>expires in {remaining(s.expiresAt)}</> : <>expiry — (rehydrated)</>}
                   </div>
                   <div className="text-[11px] text-fg-subtle font-mono mt-0.5 selectable">{s.accessKeyId}</div>
                 </div>

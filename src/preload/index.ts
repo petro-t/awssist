@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AwssistApi,
+  EcrImageRef,
+  EcrRepositoryRef,
   EcsClusterRef,
   EcsServiceRef,
   EcsTaskRef,
@@ -56,6 +58,11 @@ const api: AwssistApi = {
     ipcRenderer.invoke('ec2:listInstances', p, r),
   ssmStartSession: (p: string, r: string, instanceId: string, name?: string) =>
     ipcRenderer.invoke('ssm:startSession', p, r, instanceId, name),
+  listEcrRepositories: (p: string, r: string): Promise<EcrRepositoryRef[]> =>
+    ipcRenderer.invoke('ecr:listRepositories', p, r),
+  listEcrImages: (p: string, r: string, n: string): Promise<EcrImageRef[]> =>
+    ipcRenderer.invoke('ecr:listImages', p, r, n),
+  copyToClipboard: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
 
   startTunnel: (req: TunnelRequest): Promise<TunnelStatus> =>
     ipcRenderer.invoke('tunnel:start', req),

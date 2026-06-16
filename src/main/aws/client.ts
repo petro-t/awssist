@@ -1,5 +1,6 @@
 import { EC2Client } from '@aws-sdk/client-ec2';
 import { ECSClient } from '@aws-sdk/client-ecs';
+import { ECRClient } from '@aws-sdk/client-ecr';
 import { ElastiCacheClient } from '@aws-sdk/client-elasticache';
 import { RDSClient } from '@aws-sdk/client-rds';
 import { STSClient } from '@aws-sdk/client-sts';
@@ -16,6 +17,10 @@ export function ec2(profile: string, region: string): EC2Client {
 
 export function ecs(profile: string, region: string): ECSClient {
   return new ECSClient({ region, credentials: creds(profile) });
+}
+
+export function ecr(profile: string, region: string): ECRClient {
+  return new ECRClient({ region, credentials: creds(profile) });
 }
 
 export function elasticache(profile: string, region: string): ElastiCacheClient {

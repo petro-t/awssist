@@ -1,5 +1,67 @@
 # AWSsist Release Notes
 
+## v0.2.2 — ECR tab, tunnel status, session rehydration · 2026-06-16
+
+A feature-and-polish release focused on day-to-day workflow ergonomics.
+
+### New
+
+- **ECR tab.** New sidebar entry between ECS and Tunnels. Lists every ECR
+  repository in the selected profile/region, with live search across name
+  and URI. Expand a repo to see its images: tags as colour-coded chips,
+  digest, size in MB, "pushed Xd ago" relative time. Per-row actions:
+  **Copy URI**, **Copy docker login** (full `aws ecr get-login-password …`
+  one-liner), and **Copy ref** per image (`<uri>:<tag>` or `<uri>@<digest>`,
+  ready for `docker pull`).
+
+- **Live tunnel status dialog.** Click **Start tunnel** and the dialog now
+  switches to a status view instead of closing. Three states render
+  inline:
+  - **Establishing tunnel…** (yellow, spinner) while `aws ssm start-session`
+    boots.
+  - **Tunnel established** (green) with the concrete
+    `127.0.0.1:<port> → <host>:<remotePort>` mapping, so you know exactly
+    when to point psql/redis-cli at it.
+  - **Tunnel failed to start** (red) with the actual error from
+    session-manager-plugin — credentials, port conflicts, IAM, etc. — instead
+    of having to switch to the Tunnels tab to discover what went wrong.
+
+  The dialog stays open until you close it explicitly; closing leaves the
+  tunnel running in the background (existing Tunnels-tab lifecycle).
+
+- **Pre-flight local port check.** Before spawning the AWS CLI, AWSsist
+  briefly binds `127.0.0.1:<port>` to confirm it's free. If something else
+  is listening, the dialog flips red immediately with
+  `Local port N is already in use…` rather than the previous behavior of
+  spinning forever in "Establishing…" (the AWS CLI wrapper doesn't always
+  exit when session-manager-plugin can't bind). 30-second startup safety
+  net covers the rare AWS-side stall on top.
+
+- **Session rehydration on startup.** Active sessions now survive an app
+  restart. On launch, AWSsist scans `~/.aws/credentials` for profiles
+  carrying `aws_session_token`, validates each via STS GetCallerIdentity,
+  and re-populates the Sessions tab. Entries whose credentials have
+  expired since last quit are silently dropped (the file is left alone;
+  only the in-memory list filters them out). Rehydrated sessions show
+  `expiry — (rehydrated)` instead of a countdown — the credentials file
+  doesn't carry the exact expiry timestamp, so we honestly mark it as
+  unknown.
+
+### Polish
+
+- The Profiles list badge for rehydrated sessions renders as `session · —`.
+- Tunnels rows that hit a startup error now auto-clear from the Tunnels
+  tab after 8 seconds, so retry attempts don't pile up.
+
+### No upgrade actions required
+
+`brew upgrade --cask awssist` is the recommended path. The
+`~/.aws/credentials` rehydration is transparent — sessions you started in
+v0.2.1 will reappear on first launch of v0.2.2 if their tokens are still
+alive.
+
+---
+
 ## v0.2.1 — credential fix for terminal sessions · 2026-06-01
 
 A targeted bugfix for `ExpiredTokenException` (and `config profile ()`)

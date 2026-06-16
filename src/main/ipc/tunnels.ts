@@ -1,8 +1,54 @@
 import { randomUUID } from 'node:crypto';
 import { ChildProcess, spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { BrowserWindow, ipcMain } from 'electron';
 import { makeCredentialsProvider } from '../aws/credentials';
 import type { TunnelRequest, TunnelStatus } from '@shared/types';
+
+/**
+ * Briefly bind a TCP server on 127.0.0.1:<port> to probe availability. If
+ * something else is already listening, bind returns EADDRINUSE and we know
+ * not to even spawn the AWS CLI — otherwise `aws ssm start-session` would
+ * hang indefinitely in "starting", since the wrapper python process doesn't
+ * always exit when session-manager-plugin's bind fails.
+ */
+async function probePort(port: number): Promise<{ ok: true } | { ok: false; reason: string }> {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    const done = (result: { ok: true } | { ok: false; reason: string }): void => {
+      try {
+        probe.removeAllListeners();
+      } catch {
+        /* ignore */
+      }
+      try {
+        probe.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(result);
+    };
+    probe.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        done({
+          ok: false,
+          reason:
+            `Local port ${port} is already in use on 127.0.0.1. ` +
+            `Stop whatever is bound to it (e.g. an older AWSsist tunnel, or a local server) — or pick a different local port and try again.`,
+        });
+      } else if (err.code === 'EACCES') {
+        done({
+          ok: false,
+          reason: `Permission denied binding port ${port}. Ports below 1024 require sudo; pick a higher port (e.g. 15432).`,
+        });
+      } else {
+        done({ ok: false, reason: `${err.code ?? 'Error'}: ${err.message}` });
+      }
+    });
+    probe.once('listening', () => done({ ok: true }));
+    probe.listen(port, '127.0.0.1');
+  });
+}
 
 interface Tunnel {
   status: TunnelStatus;
@@ -86,6 +132,22 @@ async function startTunnel(req: TunnelRequest): Promise<TunnelStatus> {
   tunnels.set(id, tunnel);
   broadcast(snapshot(tunnel));
 
+  // Pre-flight port probe. Fail fast and cleanly when the port is taken — the
+  // alternative is `aws ssm start-session` hanging indefinitely in "starting".
+  const probe = await probePort(req.localPort);
+  if (!probe.ok) {
+    status.state = 'error';
+    status.error = probe.reason;
+    broadcast(snapshot(tunnel));
+    // Auto-drop the entry from the registry shortly so the Tunnels tab doesn't
+    // accumulate errored rows the user has to click to clear.
+    setTimeout(() => {
+      tunnels.delete(id);
+      broadcastRemoval(id);
+    }, 8000);
+    return snapshot(tunnel);
+  }
+
   const args = [
     'ssm',
     'start-session',
@@ -157,16 +219,40 @@ async function startTunnel(req: TunnelRequest): Promise<TunnelStatus> {
     broadcast(snapshot(tunnel));
   });
 
+  // Safety net: if the process is still in "starting" 30 s in (no "Waiting for
+  // connections" line, no exit), treat as failure and tear it down. Covers the
+  // rare case where the CLI hangs without printing a usable error.
+  const startupTimer = setTimeout(() => {
+    if (status.state === 'starting') {
+      const tail = bootBuffer.split('\n').slice(-5).join('\n').trim();
+      status.state = 'error';
+      status.error =
+        tail ||
+        'Tunnel did not establish within 30 seconds. The bastion may not have SSM access, or the AWS CLI hung. Try again, or check the bastion.';
+      broadcast(snapshot(tunnel));
+      killTunnelTree(tunnel);
+    }
+  }, 30_000);
+
   proc.on('close', (code) => {
     if (tunnel.killTimer) {
       clearTimeout(tunnel.killTimer);
       tunnel.killTimer = undefined;
     }
+    clearTimeout(startupTimer);
     if (status.state !== 'error') {
       const tail = bootBuffer.split('\n').slice(-5).join('\n').trim();
+      const exitedDuringStartup = status.state === 'starting';
       if (code !== 0 && code !== null) {
         status.state = 'error';
         status.error = tail || `aws ssm start-session exited with code ${code}`;
+      } else if (exitedDuringStartup) {
+        // Clean exit before we ever saw "Waiting for connections" — something
+        // gave up before binding. Treat as a failure so the dialog shows red
+        // rather than a misleading "stopped" green-tinged neutral.
+        status.state = 'error';
+        status.error =
+          tail || 'aws ssm start-session exited before the tunnel finished establishing.';
       } else {
         status.state = 'stopped';
       }

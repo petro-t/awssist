@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Network, Server, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Loader2, Network, Server, X, XCircle } from 'lucide-react';
+import { useApp } from '../store';
 import type { Ec2InstanceRef, TunnelRequest, TunnelStatus } from '@shared/types';
 
 export interface TunnelTarget {
@@ -15,17 +16,23 @@ export function TunnelDialog({
   target,
   bastions,
   onClose,
-  onStarted,
 }: {
   target: TunnelTarget;
   bastions: Ec2InstanceRef[];
   onClose: () => void;
-  onStarted: (status: TunnelStatus) => void;
 }): JSX.Element {
   const [bastionId, setBastionId] = useState<string>(bastions[0]?.instanceId ?? '');
   const [localPort, setLocalPort] = useState<string>(String(target.defaultLocalPort));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Once a tunnel is in flight, we track its id and surface live status from the store.
+  const [tunnelId, setTunnelId] = useState<string | null>(null);
+
+  // Subscribe to the live tunnel state for the tunnel this dialog started.
+  // The dialog stays open even after the tunnel reaches `running` so the user
+  // can read the success confirmation; they close it explicitly via the Close
+  // button. The tunnel itself keeps running in the background after close.
+  const liveTunnel = useApp((s) => (tunnelId ? s.tunnels.find((t) => t.id === tunnelId) : undefined));
 
   // If bastion list shrinks/changes, keep selection valid.
   useEffect(() => {
@@ -33,6 +40,9 @@ export function TunnelDialog({
       setBastionId(bastions[0].instanceId);
     }
   }, [bastions, bastionId]);
+
+  const portNumNow = useMemo(() => Number(localPort), [localPort]);
+  const portValid = Number.isFinite(portNumNow) && portNumNow >= 1 && portNumNow <= 65535;
 
   async function start(): Promise<void> {
     setError(null);
@@ -44,8 +54,7 @@ export function TunnelDialog({
       setError('Pick a bastion host.');
       return;
     }
-    const portNum = Number(localPort);
-    if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
+    if (!portValid) {
       setError('Local port must be between 1 and 65535.');
       return;
     }
@@ -55,24 +64,27 @@ export function TunnelDialog({
       bastionInstanceId: bastionId,
       targetHost: target.host,
       remotePort: target.remotePort,
-      localPort: portNum,
+      localPort: portNumNow,
       label: target.label,
     };
     setBusy(true);
     try {
       const status = await window.awssist.startTunnel(req);
-      onStarted(status);
+      setTunnelId(status.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
       setBusy(false);
     }
   }
 
+  // Once we have a tunnelId, the dialog body switches to the status view.
+  const inFlight = tunnelId !== null;
+  const finalState = liveTunnel?.state;
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
-      onClick={busy ? undefined : onClose}
+      onClick={busy && !inFlight ? undefined : onClose}
     >
       <div
         className="bg-bg-2 border border-border rounded-lg shadow-xl w-[520px] max-w-full"
@@ -80,8 +92,10 @@ export function TunnelDialog({
       >
         <div className="flex items-center px-4 py-3 border-b border-border-muted">
           <Network size={14} className="text-accent mr-2" />
-          <h2 className="text-sm font-semibold flex-1">Start tunnel</h2>
-          <button className="text-fg-muted hover:text-fg" disabled={busy} onClick={onClose}>
+          <h2 className="text-sm font-semibold flex-1">
+            {inFlight ? 'Tunnel status' : 'Start tunnel'}
+          </h2>
+          <button className="text-fg-muted hover:text-fg" onClick={onClose}>
             <X size={16} />
           </button>
         </div>
@@ -106,56 +120,69 @@ export function TunnelDialog({
             </div>
           </div>
 
-          <div>
-            <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1">Bastion host</div>
-            {bastions.length === 0 ? (
-              <div className="text-xs text-warn bg-warn/10 border border-warn/30 rounded px-2 py-1.5">
-                No bastion EC2 instances found. The script-based toolbox uses tag <code>Name=*bastion*</code>.
+          {!inFlight && (
+            <>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1">Bastion host</div>
+                {bastions.length === 0 ? (
+                  <div className="text-xs text-warn bg-warn/10 border border-warn/30 rounded px-2 py-1.5">
+                    No bastion EC2 instances found. The script-based toolbox uses tag <code>Name=*bastion*</code>.
+                  </div>
+                ) : bastions.length === 1 ? (
+                  <div className="card p-2 text-sm flex items-center gap-2">
+                    <Server size={14} className="text-fg-subtle" />
+                    <span className="flex-1">{bastions[0].name ?? bastions[0].instanceId}</span>
+                    <span className="text-[11px] text-fg-subtle font-mono">{bastions[0].instanceId}</span>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {bastions.map((b) => (
+                      <label
+                        key={b.instanceId}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded border cursor-pointer text-sm ${
+                          bastionId === b.instanceId
+                            ? 'bg-accent/10 border-accent/40 text-fg'
+                            : 'border-border-muted hover:border-border text-fg-muted'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="bastion"
+                          checked={bastionId === b.instanceId}
+                          onChange={() => setBastionId(b.instanceId)}
+                        />
+                        <Server size={12} className="text-fg-subtle" />
+                        <span className="flex-1 truncate">{b.name ?? b.instanceId}</span>
+                        <span className="text-[11px] text-fg-subtle font-mono">{b.instanceId}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : bastions.length === 1 ? (
-              <div className="card p-2 text-sm flex items-center gap-2">
-                <Server size={14} className="text-fg-subtle" />
-                <span className="flex-1">{bastions[0].name ?? bastions[0].instanceId}</span>
-                <span className="text-[11px] text-fg-subtle font-mono">{bastions[0].instanceId}</span>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {bastions.map((b) => (
-                  <label
-                    key={b.instanceId}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded border cursor-pointer text-sm ${
-                      bastionId === b.instanceId
-                        ? 'bg-accent/10 border-accent/40 text-fg'
-                        : 'border-border-muted hover:border-border text-fg-muted'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="bastion"
-                      checked={bastionId === b.instanceId}
-                      onChange={() => setBastionId(b.instanceId)}
-                    />
-                    <Server size={12} className="text-fg-subtle" />
-                    <span className="flex-1 truncate">{b.name ?? b.instanceId}</span>
-                    <span className="text-[11px] text-fg-subtle font-mono">{b.instanceId}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
 
-          <div>
-            <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1">Local port</div>
-            <input
-              className="input"
-              value={localPort}
-              onChange={(e) => setLocalPort(e.target.value)}
-              placeholder={String(target.defaultLocalPort)}
+              <div>
+                <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1">Local port</div>
+                <input
+                  className="input"
+                  value={localPort}
+                  onChange={(e) => setLocalPort(e.target.value)}
+                  placeholder={String(target.defaultLocalPort)}
+                />
+                <div className="text-[11px] text-fg-subtle mt-1">
+                  Connect to <span className="font-mono">127.0.0.1:{localPort || target.defaultLocalPort}</span> from your local tools.
+                </div>
+              </div>
+            </>
+          )}
+
+          {inFlight && (
+            <StatusBlock
+              status={liveTunnel}
+              localPort={portNumNow}
+              host={target.host}
+              remotePort={target.remotePort}
             />
-            <div className="text-[11px] text-fg-subtle mt-1">
-              Connect to <span className="font-mono">127.0.0.1:{localPort || target.defaultLocalPort}</span> from your local tools.
-            </div>
-          </div>
+          )}
 
           {error && (
             <div className="text-xs px-2 py-1.5 bg-err/10 border border-err/40 rounded text-err selectable whitespace-pre-wrap">
@@ -165,13 +192,115 @@ export function TunnelDialog({
         </div>
 
         <div className="px-4 py-3 border-t border-border-muted flex justify-end gap-2">
-          <button className="btn-secondary" disabled={busy} onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-primary" disabled={busy || bastions.length === 0} onClick={() => void start()}>
-            {busy ? 'Starting…' : 'Start tunnel'}
-          </button>
+          {!inFlight && (
+            <>
+              <button className="btn-secondary" disabled={busy} onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={busy || bastions.length === 0}
+                onClick={() => void start()}
+              >
+                {busy ? 'Starting…' : 'Start tunnel'}
+              </button>
+            </>
+          )}
+          {inFlight && (
+            <>
+              {finalState === 'running' || finalState === 'error' || finalState === 'stopped' ? (
+                <button className="btn-secondary" onClick={onClose}>Close</button>
+              ) : (
+                <button className="btn-secondary" disabled onClick={onClose}>
+                  Establishing…
+                </button>
+              )}
+              {finalState === 'running' && tunnelId && (
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    void window.awssist.stopTunnel(tunnelId);
+                  }}
+                >
+                  Stop tunnel
+                </button>
+              )}
+            </>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBlock({
+  status,
+  localPort,
+  host,
+  remotePort,
+}: {
+  status: TunnelStatus | undefined;
+  localPort: number;
+  host: string;
+  remotePort: number;
+}): JSX.Element {
+  // Until the main-process broadcast lands, status may be undefined for a beat.
+  const state = status?.state ?? 'starting';
+
+  if (state === 'running') {
+    return (
+      <div className="rounded border border-ok/40 bg-ok/10 px-3 py-2.5 text-sm">
+        <div className="flex items-center gap-2 text-ok">
+          <CheckCircle2 size={16} />
+          <span className="font-medium">Tunnel established</span>
+        </div>
+        <div className="text-xs text-fg-muted mt-1.5">
+          Connect from your local tools to{' '}
+          <span className="font-mono text-fg">127.0.0.1:{localPort}</span> — it forwards
+          to <span className="font-mono">{host}:{remotePort}</span>.
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="rounded border border-err/40 bg-err/10 px-3 py-2.5 text-sm">
+        <div className="flex items-center gap-2 text-err">
+          <XCircle size={16} />
+          <span className="font-medium">Tunnel failed to start</span>
+        </div>
+        {status?.error && (
+          <div className="text-xs text-err mt-1.5 font-mono whitespace-pre-wrap break-words selectable">
+            {status.error}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (state === 'stopped') {
+    return (
+      <div className="rounded border border-border-muted bg-bg-3 px-3 py-2.5 text-sm">
+        <div className="flex items-center gap-2 text-fg-muted">
+          <XCircle size={16} />
+          <span className="font-medium">Tunnel stopped</span>
+        </div>
+      </div>
+    );
+  }
+
+  // starting
+  return (
+    <div className="rounded border border-warn/40 bg-warn/10 px-3 py-2.5 text-sm">
+      <div className="flex items-center gap-2 text-warn">
+        <Loader2 size={16} className="animate-spin" />
+        <span className="font-medium">Establishing tunnel…</span>
+      </div>
+      <div className="text-xs text-fg-muted mt-1.5">
+        Spawning <span className="font-mono">aws ssm start-session</span> and waiting for
+        the local listener on <span className="font-mono">127.0.0.1:{localPort}</span> to come up.
+        This usually takes 2–5 seconds.
       </div>
     </div>
   );
