@@ -70,12 +70,19 @@ Apple Silicon only for now.
 
 ```sh
 brew tap petro-t/awssist
+brew trust petro-t/awssist           # one-time: Homebrew 6.0+ gates third-party taps
 brew install --cask awssist
 
 # AWS CLI dependencies AWSsist relies on at runtime
 brew install awscli
 brew install --cask session-manager-plugin
 ```
+
+> **Why `brew trust`?** Homebrew 6.0 added a safety prompt for third-party
+> taps. The trust command is one-time per tap. If you'd rather skip it,
+> `HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install --cask awssist` works for a
+> single command, or `export HOMEBREW_NO_REQUIRE_TAP_TRUST=1` in your shell rc
+> opts out globally.
 
 Future updates:
 
