@@ -1,5 +1,38 @@
 # AWSsist Release Notes
 
+## v0.2.3 — fix Linux AppImage EIO crash · 2026-06-16
+
+Hotfix for Linux. The AppImage crashed with **"A JavaScript error occurred
+in the main process — Error: write EIO"** on Linux Mint / Cinnamon (and
+likely any DE) when launched from the application menu or by double-click.
+
+### Cause
+
+AppImages launched without a terminal have no connected stdout / stderr.
+The first `console.log` after startup throws `EIO`, and AWSsist's log-bridge
+(which wraps console to broadcast logs into the renderer DevTools)
+propagated the exception instead of swallowing it. Result: the main process
+died before the window was ever created.
+
+### Fix
+
+Two layers of defense:
+
+1. The log-bridge `console.{log,warn,error}` wrapper now catches stdout
+   write failures so the renderer broadcast still happens (and the app
+   doesn't die) when stdout isn't writable.
+2. A process-level `error` listener is attached to `process.stdout` and
+   `process.stderr` at the very top of main, swallowing `EPIPE` / `EIO` so
+   nothing — Electron internals, transitive deps, our own code — can crash
+   the app on a broken pipe.
+
+### Affected platforms
+
+Linux only. macOS and Windows weren't impacted (their packaged-app launch
+flows attach functional stdout/stderr).
+
+---
+
 ## v0.2.2 — ECR tab, tunnel status, session rehydration · 2026-06-16
 
 A feature-and-polish release focused on day-to-day workflow ergonomics.

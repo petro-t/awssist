@@ -1,5 +1,18 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
+
+// Linux AppImages launched without a terminal (desktop file, file-manager
+// double-click) have no connected stdout/stderr; any write throws EIO and
+// would otherwise crash the main process. Swallow those at the source so
+// nothing — Electron internals, transitive deps, our own logs — can take the
+// app down on the first console.log. Must run before any logging happens.
+for (const stream of [process.stdout, process.stderr] as const) {
+  stream.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EPIPE' || err.code === 'EIO') return;
+    throw err;
+  });
+}
+
 import { registerProfileHandlers } from './ipc/profiles';
 import { registerSsoHandlers, rehydrateActiveSessions } from './ipc/sso';
 import { registerEcsHandlers } from './ipc/ecs';

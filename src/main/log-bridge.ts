@@ -33,8 +33,19 @@ function broadcast(entry: LogEntry): void {
 function tap(level: Level): void {
   const original = console[level].bind(console);
   console[level] = (...args: unknown[]): void => {
-    original(...args);
-    broadcast({ level, message: format(args), time: Date.now() });
+    // On Linux AppImages launched without a terminal (desktop file, double-click)
+    // stdout / stderr are not connected and writes throw EIO. The renderer
+    // broadcast must still happen, so swallow stdout failures here.
+    try {
+      original(...args);
+    } catch {
+      /* ignore — see above */
+    }
+    try {
+      broadcast({ level, message: format(args), time: Date.now() });
+    } catch {
+      /* broadcast can fail very early before any BrowserWindow exists */
+    }
   };
 }
 
