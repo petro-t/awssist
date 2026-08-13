@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Loader2, Network, Server, X, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Network, RotateCcw, Server, X, XCircle } from 'lucide-react';
 import { useApp } from '../store';
 import type { Ec2InstanceRef, TunnelRequest, TunnelStatus } from '@shared/types';
 
@@ -12,6 +12,41 @@ export interface TunnelTarget {
   region: string;
 }
 
+// Per-target local-port memory. Some databases refuse to bind the "obvious"
+// default (5432/6379) locally — devs pick a personal port and don't want to
+// retype it every session. Key is deterministic per target so a Postgres
+// cluster remembers its own port independently of Redis.
+function portStorageKey(t: TunnelTarget): string {
+  return `awssist:tunnelPort:${t.profile}:${t.host}:${t.remotePort}`;
+}
+
+function loadSavedPort(t: TunnelTarget): number | null {
+  try {
+    const raw = localStorage.getItem(portStorageKey(t));
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 && n <= 65535 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSavedPort(t: TunnelTarget, port: number): void {
+  try {
+    localStorage.setItem(portStorageKey(t), String(port));
+  } catch {
+    /* localStorage unavailable */
+  }
+}
+
+function clearSavedPort(t: TunnelTarget): void {
+  try {
+    localStorage.removeItem(portStorageKey(t));
+  } catch {
+    /* localStorage unavailable */
+  }
+}
+
 export function TunnelDialog({
   target,
   bastions,
@@ -22,7 +57,10 @@ export function TunnelDialog({
   onClose: () => void;
 }): JSX.Element {
   const [bastionId, setBastionId] = useState<string>(bastions[0]?.instanceId ?? '');
-  const [localPort, setLocalPort] = useState<string>(String(target.defaultLocalPort));
+  const savedPort = useMemo(() => loadSavedPort(target), [target]);
+  const [localPort, setLocalPort] = useState<string>(
+    String(savedPort ?? target.defaultLocalPort),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Once a tunnel is in flight, we track its id and surface live status from the store.
@@ -70,6 +108,14 @@ export function TunnelDialog({
     setBusy(true);
     try {
       const status = await window.awssist.startTunnel(req);
+      // Persist as this target's remembered port so it prefills next time —
+      // but only when it actually differs from the built-in default. That
+      // keeps the storage empty for anyone who has never customised it.
+      if (portNumNow === target.defaultLocalPort) {
+        clearSavedPort(target);
+      } else {
+        saveSavedPort(target, portNumNow);
+      }
       setTunnelId(status.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -161,7 +207,19 @@ export function TunnelDialog({
               </div>
 
               <div>
-                <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1">Local port</div>
+                <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1 flex items-center gap-2">
+                  <span>Local port</span>
+                  {portNumNow !== target.defaultLocalPort && Number.isFinite(portNumNow) && (
+                    <button
+                      type="button"
+                      className="ml-auto flex items-center gap-1 text-[10px] text-fg-subtle hover:text-fg"
+                      title={`Reset to default (${target.defaultLocalPort})`}
+                      onClick={() => setLocalPort(String(target.defaultLocalPort))}
+                    >
+                      <RotateCcw size={10} /> reset to {target.defaultLocalPort}
+                    </button>
+                  )}
+                </div>
                 <input
                   className="input"
                   value={localPort}
@@ -170,6 +228,9 @@ export function TunnelDialog({
                 />
                 <div className="text-[11px] text-fg-subtle mt-1">
                   Connect to <span className="font-mono">127.0.0.1:{localPort || target.defaultLocalPort}</span> from your local tools.
+                  {savedPort !== null && savedPort !== target.defaultLocalPort && (
+                    <span className="ml-1">Remembered from last time.</span>
+                  )}
                 </div>
               </div>
             </>

@@ -180,8 +180,15 @@ async function credEnv(profile: string, region: string): Promise<Record<string, 
 
 // ---------- IPC handlers ----------
 
+// Default when the caller doesn't specify a shell. ECS exec's `--command` is
+// word-split rather than shell-parsed, so a multi-token `sh -c '...'` chain
+// doesn't actually run as a shell — we have to send a single binary path.
+// `/bin/sh` is present on virtually every container image (busybox, alpine,
+// debian, ubuntu). Users on bash-only containers can pick bash from the UI.
+const DEFAULT_SHELL_CMD = '/bin/sh';
+
 async function execInTerminal(req: ExecRequest): Promise<void> {
-  const cmd = req.command ?? '/bin/bash';
+  const cmd = req.command && req.command.trim() ? req.command : DEFAULT_SHELL_CMD;
   const env = await credEnv(req.profile, req.region);
   return openInTerminal({
     title: `exec ${req.container} (${req.task.split('/').pop()})`,

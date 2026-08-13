@@ -1,5 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
 
 // Linux AppImages launched without a terminal (desktop file, file-manager
 // double-click) have no connected stdout/stderr; any write throws EIO and
@@ -25,11 +27,60 @@ import { buildAppMenu } from './menu';
 import { shutdownAllSsoListeners } from './aws/sso-device';
 import { installLogBridge } from './log-bridge';
 
-// Ensure /opt/homebrew/bin is on PATH for spawned aws / session-manager-plugin.
+// GUI-launched Electron apps on macOS/Linux don't inherit the user's login-shell
+// PATH — so anything the user installed via pyenv, pipx, asdf, nvm, or the
+// official aws-cli .pkg (which drops `/usr/local/aws-cli`) is invisible to
+// `execFile('aws', ...)` even though `aws --version` works fine in Terminal.
+// Ask the login shell for its PATH once at startup and merge it in.
+function pathFromLoginShell(): string | null {
+  if (process.platform === 'win32') return null;
+  const shellBin = process.env.SHELL || '/bin/zsh';
+  try {
+    // -ilc so profile/rc files (~/.zprofile, ~/.zshrc, ~/.bash_profile) run
+    // and populate PATH the same way an interactive Terminal session would.
+    // Marker sentinels so we ignore anything the rc files may print.
+    const out = execFileSync(
+      shellBin,
+      ['-ilc', 'printf __AWSSIST_PATH_START__%s__AWSSIST_PATH_END__ "$PATH"'],
+      { timeout: 4000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    const m = out.match(/__AWSSIST_PATH_START__(.*?)__AWSSIST_PATH_END__/s);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function augmentPath(): void {
-  const extras = ['/opt/homebrew/bin', '/usr/local/bin'];
-  const existing = (process.env.PATH ?? '').split(':');
-  for (const dir of extras) if (!existing.includes(dir)) existing.unshift(dir);
+  const existing = (process.env.PATH ?? '').split(':').filter(Boolean);
+  const seen = new Set(existing);
+
+  const merge = (dirs: string[]): void => {
+    for (const dir of dirs) {
+      if (!dir || seen.has(dir)) continue;
+      existing.push(dir);
+      seen.add(dir);
+    }
+  };
+
+  const shellPath = pathFromLoginShell();
+  if (shellPath) merge(shellPath.split(':').filter(Boolean));
+
+  const home = homedir();
+  merge([
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    '/usr/local/sbin',
+    '/usr/local/aws-cli',
+    '/usr/bin',
+    '/bin',
+    `${home}/.local/bin`,
+    `${home}/.pyenv/shims`,
+    `${home}/.asdf/shims`,
+    `${home}/bin`,
+  ]);
+
   process.env.PATH = existing.join(':');
 }
 

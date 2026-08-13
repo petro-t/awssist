@@ -1,19 +1,40 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { clipboard, ipcMain } from 'electron';
 import { GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { sts } from '../aws/client';
 
-function checkBin(bin: string, args: string[]): Promise<boolean> {
+function tryBin(bin: string, args: string[]): Promise<boolean> {
   return new Promise((resolve) => {
     execFile(bin, args, { timeout: 4000 }, (err) => resolve(!err));
   });
 }
 
+async function checkBin(bin: string, args: string[], fallbacks: string[]): Promise<boolean> {
+  if (await tryBin(bin, args)) return true;
+  // PATH lookup failed. Some AWS CLI installers (the official .pkg) drop the
+  // binary in a non-standard directory the login shell may have added via
+  // symlink we haven't picked up. Probe well-known absolute paths.
+  for (const abs of fallbacks) {
+    if (existsSync(abs) && (await tryBin(abs, args))) return true;
+  }
+  return false;
+}
+
 export function registerSystemHandlers(): void {
   ipcMain.handle('system:checkDeps', async () => {
     const [aws, smp] = await Promise.all([
-      checkBin('aws', ['--version']),
-      checkBin('session-manager-plugin', ['--version']),
+      checkBin('aws', ['--version'], [
+        '/usr/local/bin/aws',
+        '/opt/homebrew/bin/aws',
+        '/usr/local/aws-cli/aws',
+        '/usr/bin/aws',
+      ]),
+      checkBin('session-manager-plugin', ['--version'], [
+        '/usr/local/bin/session-manager-plugin',
+        '/opt/homebrew/bin/session-manager-plugin',
+        '/usr/local/sessionmanagerplugin/bin/session-manager-plugin',
+      ]),
     ]);
     return { aws, sessionManagerPlugin: smp };
   });

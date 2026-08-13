@@ -9,6 +9,32 @@ import type {
   EcsTaskRef,
 } from '@shared/types';
 
+type ShellChoice = 'auto' | 'bash' | 'sh' | 'ash';
+
+// Command strings passed to `aws ecs execute-command --command …`. ECS exec
+// word-splits this value rather than running it through a shell, so the
+// safest cross-container default is `/bin/sh` — near-universally present.
+// Users can pick bash for images that only ship bash.
+const SHELL_CMD: Record<ShellChoice, string> = {
+  auto: '/bin/sh',
+  bash: '/bin/bash',
+  sh: '/bin/sh',
+  ash: '/bin/ash',
+};
+
+const SHELL_STORAGE_KEY = 'awssist:shellByContainer';
+
+function loadShellPrefs(): Record<string, ShellChoice> {
+  try {
+    const raw = localStorage.getItem(SHELL_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, ShellChoice>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export function Ecs(): JSX.Element {
   const profiles = useApp((s) => s.profiles);
   const [profile, setProfile] = useState('');
@@ -67,8 +93,23 @@ export function Ecs(): JSX.Element {
 
   const filteredTasks = useMemo(() => tasks.filter((t) => t.lastStatus === 'RUNNING'), [tasks]);
 
+  const [shellPrefs, setShellPrefs] = useState<Record<string, ShellChoice>>(loadShellPrefs);
+
+  function setShellFor(container: string, choice: ShellChoice): void {
+    setShellPrefs((prev) => {
+      const next = { ...prev, [container]: choice };
+      try {
+        localStorage.setItem(SHELL_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage unavailable */
+      }
+      return next;
+    });
+  }
+
   async function openInTerminal(task: EcsTaskRef, container: string): Promise<void> {
     if (!cluster) return;
+    const choice = shellPrefs[container] ?? 'auto';
     try {
       await window.awssist.execInTerminal({
         profile,
@@ -76,7 +117,7 @@ export function Ecs(): JSX.Element {
         cluster: cluster.arn,
         task: task.arn,
         container,
-        command: '/bin/bash',
+        command: SHELL_CMD[choice],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -134,18 +175,32 @@ export function Ecs(): JSX.Element {
                 <span className="text-[10px] text-fg-subtle">{t.lastStatus}</span>
               </div>
               <div className="space-y-1">
-                {t.containers.map((c) => (
-                  <div key={c.name} className="flex items-center gap-2 text-xs">
-                    <span className="flex-1 truncate text-fg-muted">{c.name}</span>
-                    <button
-                      className="btn-icon"
-                      title="Open shell in Terminal.app"
-                      onClick={() => void openInTerminal(t, c.name)}
-                    >
-                      <ExternalLink size={12} />
-                    </button>
-                  </div>
-                ))}
+                {t.containers.map((c) => {
+                  const choice = shellPrefs[c.name] ?? 'auto';
+                  return (
+                    <div key={c.name} className="flex items-center gap-2 text-xs">
+                      <span className="flex-1 truncate text-fg-muted">{c.name}</span>
+                      <select
+                        className="bg-bg-2 border border-border-muted rounded px-1 py-0.5 text-[10px] text-fg-muted"
+                        value={choice}
+                        title="Shell to run inside the container"
+                        onChange={(e) => setShellFor(c.name, e.target.value as ShellChoice)}
+                      >
+                        <option value="auto">auto</option>
+                        <option value="bash">bash</option>
+                        <option value="sh">sh</option>
+                        <option value="ash">ash</option>
+                      </select>
+                      <button
+                        className="btn-icon"
+                        title={`Open ${choice === 'auto' ? 'sh' : choice} shell in Terminal`}
+                        onClick={() => void openInTerminal(t, c.name)}
+                      >
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

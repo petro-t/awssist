@@ -1,5 +1,43 @@
 # AWSsist Release Notes
 
+## v0.2.4 — dep detection, shell fallback, remembered tunnel ports · 2026-08-07
+
+Small quality-of-life release for macOS/Linux users on non-Homebrew
+installs and for anyone who runs the same tunnels every day.
+
+### Fixes
+
+- **"Missing: aws-cli" false positive on macOS.** GUI-launched Electron
+  apps don't inherit your login shell's PATH, so an `aws` installed via
+  pyenv, pipx, asdf, or the official `/usr/local/aws-cli/aws` bundle was
+  invisible to the deps check even though it worked fine in Terminal.
+  Startup now asks the login shell (`$SHELL -ilc 'printf $PATH'`) for its
+  PATH and merges it in. `checkBin` also probes well-known absolute paths
+  as a fallback, so the deps status can no longer lie.
+
+- **ECS exec fails on containers without bash.** The default `--command`
+  was `/bin/bash`, which killed the session on images that only ship
+  `/bin/sh` (busybox, alpine, distroless-ish). The new default is
+  `/bin/sh` — near-universally present. Containers that only have bash
+  can be flipped over with the new dropdown (below).
+
+### New
+
+- **Per-container shell override.** ECS tasks now show a compact
+  `auto / bash / sh / ash` dropdown next to each container. The choice
+  is persisted per container name in `localStorage` and survives app
+  restarts — set once and forget.
+
+- **Remembered local tunnel ports.** The tunnel dialog now remembers
+  the last local port you used for each `(profile, host, remotePort)`
+  target. Change it once from the default (e.g. Postgres → `15432`)
+  and it prefills that way for every subsequent connection to the same
+  target. A small "reset to N" link puts it back to the built-in
+  default; a "Remembered from last time." hint makes it clear when the
+  input is coming from memory vs. the default.
+
+---
+
 ## v0.2.3 — fix Linux AppImage EIO crash · 2026-06-16
 
 Hotfix for Linux. The AppImage crashed with **"A JavaScript error occurred
